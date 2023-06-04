@@ -45,11 +45,21 @@ resource "aws_subnet" "private_2" {
   tags                    = merge(local.tags, { "Name" = "private_2", "visibility" = "private" })
 }
 
-
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.vpc.id
 
   tags = local.tags
+}
+
+
+resource "aws_eip" "nat" {
+  domain     = "vpc"
+  depends_on = [aws_internet_gateway.igw]
+}
+
+resource "aws_nat_gateway" "nat_gateway" {
+  allocation_id = aws_eip.nat.id
+  subnet_id     = aws_subnet.public_1.id
 }
 
 # Create route-tables
@@ -64,6 +74,18 @@ resource "aws_route_table" "public_route_table" {
   tags = local.tags
 }
 
+resource "aws_route_table" "private_route_table" {
+  vpc_id = aws_vpc.vpc.id
+
+  # A Nat Gateway allow the services in a private vpc to access the internet
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat_gateway.id
+  }
+  tags = local.tags
+}
+
+
 # Associate table with public subnet
 resource "aws_route_table_association" "public_1_route_association" {
   subnet_id      = aws_subnet.public_1.id
@@ -73,4 +95,15 @@ resource "aws_route_table_association" "public_1_route_association" {
 resource "aws_route_table_association" "public_2_route_association" {
   subnet_id      = aws_subnet.public_2.id
   route_table_id = aws_route_table.public_route_table.id
+}
+
+# Associate table with private subnets
+resource "aws_route_table_association" "private_1_route_association" {
+  subnet_id      = aws_subnet.private_1.id
+  route_table_id = aws_route_table.private_route_table.id
+}
+
+resource "aws_route_table_association" "private_2_route_association" {
+  subnet_id      = aws_subnet.private_2.id
+  route_table_id = aws_route_table.private_route_table.id
 }
